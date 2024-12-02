@@ -1,0 +1,460 @@
+<html><head><base href="." />
+<style>
+  /* Keeping all the same styles */
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #333;
+    touch-action: none;
+  }
+
+  #game {
+    background: linear-gradient(#1a1a4f, #4a4a8f);
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .mobile-controls {
+    position: fixed;
+    bottom: 20px;
+    width: 100%;
+    display: none;
+    z-index: 100;
+  }
+
+  .mobile-controls.visible {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+  }
+
+  .direction-controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .control-btn {
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid white;
+    border-radius: 50%;
+    color: white;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #toggleControls {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid white;
+    color: white;
+    border-radius: 5px;
+    z-index: 100;
+  }
+
+  #jumpscare {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="15" fill="yellow"/><circle cx="80" cy="20" r="15" fill="yellow"/><path d="M30 60 Q50 80 70 60" stroke="yellow" stroke-width="5" fill="none"/></svg>') center/50% no-repeat;
+    display: none;
+    z-index: 1000;
+    background-color: white;
+  }
+
+  #credits {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    font-family: Arial, sans-serif;
+    animation: scrollCredits 15s linear;
+  }
+
+  @keyframes scrollCredits {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(-100%);
+    }
+  }
+
+  #credits h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+    color: #ffd700;
+  }
+
+  #credits p {
+    font-size: 24px;
+    margin: 10px 0;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="jumpscare"></div>
+<div id="credits">
+  <h1>Congratulations!</h1>
+  <p>You've reached 15000 points!</p>
+  <p>Thank you for playing</p>
+  <p>Created by: AI Game Studio</p>
+  <p>Music: mzlff - примагнитило</p>
+  <p>Sound Effects: Tuco GET OUT!</p>
+  <p>Special thanks to:</p>
+  <p>You, the awesome player!</p>
+</div>
+<button id="toggleControls">Toggle Mobile Controls</button>
+<div class="mobile-controls">
+  <div class="direction-controls">
+    <div class="control-btn" id="leftBtn">←</div>
+    <div class="control-btn" id="rightBtn">→</div>
+  </div>
+  <div class="control-btn" id="jumpBtn">↑</div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const mobileControls = document.querySelector('.mobile-controls');
+const toggleControlsBtn = document.getElementById('toggleControls');
+const jumpscareElement = document.getElementById('jumpscare');
+const creditsScreen = document.getElementById('credits');
+
+let platformCount = 0;
+let jumpscareTriggered = false;
+let score = 0;
+let highestY = 0;
+let lastY = 0;
+let lastJumpscareScore = 0;
+let creditsShown = false;
+let gameActive = true; // Added gameActive flag
+
+const audio = new Audio('Tuco _GET OUT!!!!_ Sound Effect.mp3');
+const backgroundMusic = new Audio('mzlff - примагнитило.mp3');
+backgroundMusic.loop = true;
+
+// Start background music on first user interaction
+document.addEventListener('click', () => {
+  backgroundMusic.play().catch(e => console.error('Background music failed to play:', e));
+}, { once: true });
+
+function showJumpscare() {
+  // Only trigger at 500, 5000, and 10000 score points
+  if ((score >= 500 && lastJumpscareScore < 500) || 
+      (score >= 5000 && lastJumpscareScore < 5000) ||
+      (score >= 10000 && lastJumpscareScore < 10000)) {
+    jumpscareElement.style.display = 'block';
+    audio.play().catch(e => console.error('Audio play failed:', e));
+    lastJumpscareScore = score;
+    setTimeout(() => {
+      jumpscareElement.style.display = 'none';
+    }, 1000);
+  }
+}
+
+toggleControlsBtn.addEventListener('click', () => {
+  mobileControls.classList.toggle('visible');
+});
+
+function showCredits() {
+  if (score >= 15000 && !creditsShown) {
+    creditsScreen.style.display = 'flex';
+    creditsShown = true;
+    
+    // Stop the game loop after credits
+    setTimeout(() => {
+      creditsScreen.style.display = 'none';
+      // Instead of resetting, we'll stop the game
+      gameActive = false; // Added this flag to control game state
+    }, 15000);
+  }
+}
+
+function resetGame() {
+  player.x = 50;
+  player.y = canvas.height - 100;
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.canDoubleJump = false;
+  player.hasDoubleJumped = false;
+  score = 0;
+  lastJumpscareScore = 0;
+  platformCount = 0;
+  lastY = player.y;
+  highestY = 0;
+  creditsShown = false;
+  
+  platforms = [new Platform(0, canvas.height - 40, canvas.width, 40)];
+  minPlatformY = canvas.height - 40;
+  
+  for (let y = canvas.height - 200; y > canvas.height - 800; y -= 70) {
+    const width = 100 + Math.random() * 100;
+    const x = Math.random() * (canvas.width - width);
+    platforms.push(new Platform(x, y, width, 20));
+    minPlatformY = Math.min(minPlatformY, y);
+  }
+}
+
+function checkGameOver() {
+  if (player.y > canvas.height) {
+    resetGame();
+  }
+}
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+class Player {
+  constructor() {
+    this.x = 50;
+    this.y = canvas.height - 100;
+    this.width = 30;
+    this.height = 30;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.speed = 7;
+    this.jumpForce = -18;
+    this.gravity = 0.6;
+    this.onGround = false;
+    this.friction = 0.85;
+    this.canDoubleJump = false;
+    this.hasDoubleJumped = false;
+    lastY = this.y;
+    highestY = 0;
+  }
+
+  update() {
+    this.velocityY += this.gravity;
+    this.velocityX *= this.friction;
+    this.x += this.velocityX;
+    this.y += this.velocityY;
+
+    if (this.y < lastY) {
+      const newScore = Math.floor(highestY + (lastY - this.y));
+      if (newScore > score) {
+        score = newScore;
+        showJumpscare();
+      }
+    }
+    lastY = this.y;
+
+    this.onGround = false;
+    platforms.forEach(platform => {
+      if (this.checkCollision(platform)) {
+        this.handleCollision(platform);
+      }
+    });
+
+    if (this.x < 0) this.x = 0;
+    if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+    
+    if (this.y < canvas.height / 2) {
+      const diff = canvas.height / 2 - this.y;
+      this.y += diff;
+      platforms.forEach(platform => platform.y += diff);
+      highestY += diff;
+      
+      while (-minPlatformY < maxHeight) {
+        generateNewPlatform();
+      }
+    }
+
+    // Reset double jump when on ground
+    if (this.onGround) {
+      this.canDoubleJump = true;
+      this.hasDoubleJumped = false;
+    }
+  }
+
+  checkCollision(platform) {
+    return this.x < platform.x + platform.width &&
+           this.x + this.width > platform.x &&
+           this.y < platform.y + platform.height &&
+           this.y + this.height > platform.y;
+  }
+
+  handleCollision(platform) {
+    if (this.velocityY >= 0) {
+      const topOverlap = this.y + this.height - platform.y;
+      if (topOverlap <= this.velocityY + 10) {
+        this.y = platform.y - this.height;
+        this.velocityY = 0;
+        this.onGround = true;
+        this.canDoubleJump = false; // Reset double jump capability when landing
+        this.hasDoubleJumped = false;
+      }
+    }
+  }
+
+  draw() {
+    ctx.fillStyle = '#ff5555';
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+
+  jump() {
+    if (this.onGround) {
+      this.velocityY = this.jumpForce;
+      this.onGround = false;
+      this.canDoubleJump = true;
+      this.hasDoubleJumped = false; // Reset double jump state when starting the first jump
+    } else if (this.canDoubleJump && !this.hasDoubleJumped) {
+      this.velocityY = this.jumpForce;
+      this.hasDoubleJumped = true;
+      this.canDoubleJump = false;
+    }
+  }
+}
+
+class Platform {
+  constructor(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+  }
+
+  draw() {
+    ctx.fillStyle = '#44aa44';
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+}
+
+const player = new Player();
+let platforms = [new Platform(0, canvas.height - 40, canvas.width, 40)];
+let maxHeight = 15000; // Changed maxHeight to 15000
+let minPlatformY = canvas.height - 40;
+
+function generateNewPlatform() {
+  const minWidth = 100;
+  const maxWidth = 200;
+  const width = minWidth + Math.random() * (maxWidth - minWidth);
+  const x = Math.random() * (canvas.width - width);
+  const minGap = 60;
+  const maxGap = 100;
+  const y = minPlatformY - (minGap + Math.random() * (maxGap - minGap));
+  
+  const platform = new Platform(x, y, width, 20);
+  platforms.push(platform);
+  minPlatformY = y;
+  
+  platforms = platforms.filter(p => p.y < canvas.height + 200);
+}
+
+for (let y = canvas.height - 200; y > canvas.height - 800; y -= 70) {
+  const width = 100 + Math.random() * 100;
+  const x = Math.random() * (canvas.width - width);
+  platforms.push(new Platform(x, y, width, 20));
+  minPlatformY = Math.min(minPlatformY, y);
+}
+
+const keys = {};
+let jumpKeyPressed = false;
+
+window.addEventListener('keydown', (e) => {
+  if (!jumpKeyPressed && (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ')) {
+    jumpKeyPressed = true;
+    player.jump();
+  }
+  keys[e.key] = true;
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') {
+    jumpKeyPressed = false;
+  }
+  keys[e.key] = false;
+});
+
+let touchControls = {
+  left: false,
+  right: false,
+  jump: false
+};
+
+function setupMobileButton(element, control) {
+  element.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touchControls[control] = true;
+  });
+  
+  element.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    touchControls[control] = false;
+  });
+  
+  element.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    touchControls[control] = true;
+  });
+  
+  element.addEventListener('mouseup', (e) => {
+    e.preventDefault();
+    touchControls[control] = false;
+  });
+}
+
+setupMobileButton(document.getElementById('leftBtn'), 'left');
+setupMobileButton(document.getElementById('rightBtn'), 'right');
+setupMobileButton(document.getElementById('jumpBtn'), 'jump');
+
+function handleInput() {
+  if (keys['ArrowLeft'] || keys['a'] || touchControls.left) {
+    player.velocityX = -player.speed;
+  }
+  if (keys['ArrowRight'] || keys['d'] || touchControls.right) {
+    player.velocityX = player.speed;
+  }
+  // Removed jump check from here since we're handling it in the keydown event
+}
+
+function gameLoop() {
+  if (!gameActive) return; // Stop the loop if game is not active
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  handleInput();
+  player.update();
+  platforms.forEach(platform => platform.draw());
+  player.draw();
+  drawScore();
+  showCredits();
+
+  checkGameOver();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function drawScore() {
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '24px Arial';
+  ctx.fillText(`Score: ${score}`, 20, 40);
+}
+
+gameLoop();
+</script>
+</body></html>
